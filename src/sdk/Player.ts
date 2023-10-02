@@ -553,7 +553,6 @@ export class Player extends Unit {
   }
 
   attackIfPossible() {
-    this.attackDelay--
 
     if (this.canAttack() === false) {
       return;
@@ -563,7 +562,7 @@ export class Player extends Unit {
       this.setHasLOS()
       if (this.hasLOS && this.aggro && this.attackDelay <= 0 && this.aggro.isDying() === false) {
         if (this.attack()) {
-          this.attackDelay = this.attackSpeed
+          this.attackTick = this.region.world.globalTickCounter + this.attackSpeed
         }
       }
     }
