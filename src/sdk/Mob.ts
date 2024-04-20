@@ -1,18 +1,20 @@
-'use strict'
-import { every } from 'lodash'
+"use strict";
+import { every } from "lodash";
 
-import { Settings } from './Settings'
-import { LineOfSight } from './LineOfSight'
-import { Pathing } from './Pathing'
+import { Settings } from "./Settings";
+import { LineOfSight } from "./LineOfSight";
+import { Pathing } from "./Pathing";
 
-import { Weapon } from './gear/Weapon'
-import { Unit, UnitBonuses, UnitStats, UnitTypes } from './Unit'
-import { Location } from "./Location"
-import { Collision } from './Collision'
-import { SoundCache } from './utils/SoundCache';
-import { Viewport } from './Viewport'
-import { Random } from './Random'
-import { Region } from './Region'
+import { Weapon } from "./gear/Weapon";
+import { Unit, UnitBonuses, UnitOptions, UnitStats, UnitTypes } from "./Unit";
+import { Location } from "./Location";
+import { Collision } from "./Collision";
+import { SoundCache } from "./utils/SoundCache";
+import { Viewport } from "./Viewport";
+import { Random } from "./Random";
+import { Region } from "./Region";
+import { CanvasSpriteModel } from "./rendering/CanvasSpriteModel";
+import { Model } from "./rendering/Model";
 
 export enum AttackIndicators {
   NONE = 0,
@@ -22,9 +24,8 @@ export enum AttackIndicators {
 }
 
 export interface WeaponsMap {
-  [key: string]: Weapon
+  [key: string]: Weapon;
 }
-
 
 export class Mob extends Unit {
   static mobIdTracker = 0;
@@ -40,15 +41,19 @@ export class Mob extends Unit {
   tcc: Location[];
   removableWithRightClick = false;
 
-  get type () {
-    return UnitTypes.MOB
+  constructor(region: Region, location: Location, options?: UnitOptions) {
+    super(region, location, options);
+  }
+
+  override get type() {
+    return UnitTypes.MOB;
   }
 
   canBeAttacked() {
     return true;
   }
 
-  setStats () {
+  override setStats() {
     // non boosted numbers
     this.stats = {
       attack: 99,
@@ -56,8 +61,8 @@ export class Mob extends Unit {
       defence: 99,
       range: 99,
       magic: 99,
-      hitpoint: 99
-    }
+      hitpoint: 99,
+    };
 
     // with boosts
     this.currentStats = {
@@ -66,80 +71,87 @@ export class Mob extends Unit {
       defence: 99,
       range: 99,
       magic: 99,
-      hitpoint: 99
-    }
-
+      hitpoint: 99,
+    };
   }
 
-
-  get bonuses(): UnitBonuses {
+  override get bonuses(): UnitBonuses {
     return {
       attack: {
         stab: 0,
         slash: 0,
         crush: 0,
         magic: 0,
-        range: 0
+        range: 0,
       },
       defence: {
         stab: 0,
         slash: 0,
         crush: 0,
         magic: 0,
-        range: 0
+        range: 0,
       },
       other: {
         meleeStrength: 0,
         rangedStrength: 0,
         magicDamage: 0,
-        prayer: 0
-      }
+        prayer: 0,
+      },
     };
   }
 
-  movementStep () {
+  override movementStep() {
     if (this.dying === 0) {
-      return
+      return;
     }
-    this.processIncomingAttacks()
+    this.processIncomingAttacks();
 
     this.spawnDelay--;
     if (this.spawnDelay > 0) {
       return;
     }
-    this.perceivedLocation = { x: this.location.x, y: this.location.y }
+    this.perceivedLocation = { x: this.location.x, y: this.location.y };
 
-    this.setHasLOS()
+    this.setHasLOS();
     if (this.canMove() && this.aggro) {
-      let dx = this.location.x + Math.sign(this.aggro.location.x - this.location.x)
-      let dy = this.location.y + Math.sign(this.aggro.location.y - this.location.y)
+      let dx = this.location.x + Math.sign(this.aggro.location.x - this.location.x);
+      let dy = this.location.y + Math.sign(this.aggro.location.y - this.location.y);
 
-      if (Collision.collisionMath(this.location.x, this.location.y, this.size, this.aggro.location.x, this.aggro.location.y, 1)) {
+      if (
+        Collision.collisionMath(
+          this.location.x,
+          this.location.y,
+          this.size,
+          this.aggro.location.x,
+          this.aggro.location.y,
+          1,
+        )
+      ) {
         // Random movement if player is under the mob.
         if (Random.get() < 0.5) {
-          dy = this.location.y
+          dy = this.location.y;
           if (Random.get() < 0.5) {
-            dx = this.location.x + 1
+            dx = this.location.x + 1;
           } else {
-            dx = this.location.x - 1
+            dx = this.location.x - 1;
           }
         } else {
-          dx = this.location.x
+          dx = this.location.x;
           if (Random.get() < 0.5) {
-            dy = this.location.y + 1
+            dy = this.location.y + 1;
           } else {
-            dy = this.location.y - 1
+            dy = this.location.y - 1;
           }
         }
       } else if (Collision.collisionMath(dx, dy, this.size, this.aggro.location.x, this.aggro.location.y, 1)) {
         // allows corner safespotting
-        dy = this.location.y
+        dy = this.location.y;
       }
 
       if (this.attackDelay > this.attackSpeed) {
         // No movement right after melee dig. 8 ticks after the dig it should be able to move again.
-        dx = this.location.x
-        dy = this.location.y
+        dx = this.location.x;
+        dy = this.location.y;
       }
 
       const xOff = dx - this.location.x;
@@ -147,312 +159,361 @@ export class Mob extends Unit {
 
       let xTiles = this.getXMovementTiles(xOff, yOff);
       let yTiles = this.getYMovementTiles(xOff, yOff);
-      let xSpace = every(xTiles.map((location: Location) => Pathing.canTileBePathedTo(this.region, location.x, location.y, 1, this.consumesSpace as Mob)), Boolean)
-      let ySpace = every(yTiles.map((location: Location) => Pathing.canTileBePathedTo(this.region, location.x, location.y, 1, this.consumesSpace as Mob)), Boolean)
+      let xSpace = every(
+        xTiles.map((location: Location) =>
+          Pathing.canTileBePathedTo(this.region, location.x, location.y, 1, this.consumesSpace as Mob),
+        ),
+        Boolean,
+      );
+      let ySpace = every(
+        yTiles.map((location: Location) =>
+          Pathing.canTileBePathedTo(this.region, location.x, location.y, 1, this.consumesSpace as Mob),
+        ),
+        Boolean,
+      );
       const both = xSpace && ySpace;
 
-      // if (this.mobName() === EntityName.JAL_AK){ 
+      // if (this.mobName() === EntityName.JAL_AK){
       //   this.tcc =  xTiles; //xTiles.concat(yTiles);
       // }
 
       if (!both) {
         xTiles = this.getXMovementTiles(xOff, 0);
-        xSpace = every(xTiles.map((location: Location) => Pathing.canTileBePathedTo(this.region, location.x, location.y, 1, this.consumesSpace as Mob)), Boolean)
+        xSpace = every(
+          xTiles.map((location: Location) =>
+            Pathing.canTileBePathedTo(this.region, location.x, location.y, 1, this.consumesSpace as Mob),
+          ),
+          Boolean,
+        );
         if (!xSpace) {
           yTiles = this.getYMovementTiles(0, yOff);
-          ySpace = every(yTiles.map((location: Location) => Pathing.canTileBePathedTo(this.region, location.x, location.y, 1, this.consumesSpace as Mob)), Boolean)
-        }        
+          ySpace = every(
+            yTiles.map((location: Location) =>
+              Pathing.canTileBePathedTo(this.region, location.x, location.y, 1, this.consumesSpace as Mob),
+            ),
+            Boolean,
+          );
+        }
       }
 
       if (both) {
-        this.location.x = dx
-        this.location.y = dy
+        this.location.x = dx;
+        this.location.y = dy;
       } else if (xSpace) {
-        this.location.x = dx
+        this.location.x = dx;
       } else if (ySpace) {
-        this.location.y = dy
+        this.location.y = dy;
       }
     }
   }
 
   getXMovementTiles(xOff: number, yOff: number) {
-
-    const start = (yOff === -1) ? -1 : 0;
-    const end = (yOff === 1) ? this.size + 1 : this.size;
+    const start = yOff === -1 ? -1 : 0;
+    const end = yOff === 1 ? this.size + 1 : this.size;
     const xTiles = [];
     if (xOff === -1) {
-
-      for (let i=start;i<end;i++){
+      for (let i = start; i < end; i++) {
         xTiles.push({
           x: this.location.x - 1,
-          y: this.location.y - i
-        })  
+          y: this.location.y - i,
+        });
       }
-
-    }else if (xOff === 1){
-
-
-      for (let i=start;i<end;i++){
+    } else if (xOff === 1) {
+      for (let i = start; i < end; i++) {
         xTiles.push({
           x: this.location.x + this.size,
-          y: this.location.y - i
-        })  
+          y: this.location.y - i,
+        });
       }
     }
-    return xTiles
+    return xTiles;
   }
 
   getYMovementTiles(xOff: number, yOff: number) {
-
-    const start = (xOff === -1) ? -1 : 0;
-    const end = (xOff === 1) ? this.size + 1 : this.size;
+    const start = xOff === -1 ? -1 : 0;
+    const end = xOff === 1 ? this.size + 1 : this.size;
 
     const yTiles = [];
     if (yOff === -1) {
-      
       // south
-      for (let i=start;i<end;i++){
+      for (let i = start; i < end; i++) {
         yTiles.push({
           x: this.location.x + i,
-          y: this.location.y + 1
-        })  
+          y: this.location.y + 1,
+        });
       }
-    }else if (yOff === 1){
-
+    } else if (yOff === 1) {
       // north
-      for (let i=start;i<end;i++){
+      for (let i = start; i < end; i++) {
         yTiles.push({
           x: this.location.x + i,
-          y: this.location.y - this.size
-        })  
+          y: this.location.y - this.size,
+        });
       }
     }
 
     return yTiles;
   }
   // todo: Rename this possibly? it returns the attack style if it's possible
-  canMeleeIfClose () {
-    return ''
+  canMeleeIfClose(): "slash" | "crush" | "stab" | "" {
+    return "";
   }
 
-  
-  attackStep () {
+  override attackStep() {
+    super.attackStep();
 
     if (this.spawnDelay > 0) {
       return;
     }
     if (this.dying === 0) {
-      return
+      return;
     }
 
-    this.attackIfPossible()
-    this.detectDeath()
+    this.attackIfPossible();
+    this.detectDeath();
 
     this.frozen--;
     this.stunned--;
-
   }
 
-  attackStyleForNewAttack () {
-    return 'slash'
+  attackStyleForNewAttack() {
+    return "slash";
   }
 
-  attackIfPossible () {
-    this.attackDelay--
-
-    this.hadLOS = this.hasLOS
-    this.setHasLOS()
+  attackIfPossible() {
+    this.hadLOS = this.hasLOS;
+    this.setHasLOS();
 
     if (this.canAttack() === false) {
       return;
     }
 
-    this.attackStyle = this.attackStyleForNewAttack()
+    this.attackStyle = this.attackStyleForNewAttack();
 
-    
-    const weaponIsAreaAttack = this.weapons[this.attackStyle].isAreaAttack
-    let isUnderAggro = false
+    const weaponIsAreaAttack = this.weapons[this.attackStyle].isAreaAttack;
+    let isUnderAggro = false;
     if (!weaponIsAreaAttack) {
-      isUnderAggro = Collision.collisionMath(this.location.x, this.location.y, this.size, this.aggro.location.x, this.aggro.location.y, 1)
+      isUnderAggro = Collision.collisionMath(
+        this.location.x,
+        this.location.y,
+        this.size,
+        this.aggro.location.x,
+        this.aggro.location.y,
+        1,
+      );
     }
-    this.attackFeedback = AttackIndicators.NONE
+    this.attackFeedback = AttackIndicators.NONE;
 
     if (!isUnderAggro && this.hasLOS && this.attackDelay <= 0) {
-      this.attack()
+      this.attack() && this.didAttack();
     }
   }
 
-  magicMaxHit () {
-    return 0
+  magicMaxHit() {
+    return 0;
   }
 
-  attack () {
-
+  attack() {
+    if (this.aggro.dying >= 0) {
+      return false;
+    }
     if (this.canMeleeIfClose() && Weapon.isMeleeAttackStyle(this.attackStyle) === false) {
       if (this.isWithinMeleeRange() && Random.get() < 0.5) {
-        this.attackStyle = this.canMeleeIfClose()
+        this.attackStyle = this.canMeleeIfClose();
       }
     }
 
-    if (this.weapons[this.attackStyle].isBlockable(this, this.aggro, { attackStyle: this.attackStyle })) {
-      this.attackFeedback = AttackIndicators.BLOCKED
+    if (
+      this.weapons[this.attackStyle].isBlockable(this, this.aggro, {
+        attackStyle: this.attackStyle,
+      })
+    ) {
+      this.attackFeedback = AttackIndicators.BLOCKED;
     } else {
-      this.attackFeedback = AttackIndicators.HIT
+      this.attackFeedback = AttackIndicators.HIT;
     }
-    this.weapons[this.attackStyle].attack(this, this.aggro as Unit /* hack */, { attackStyle: this.attackStyle, magicBaseSpellDamage: this.magicMaxHit() })
+    this.weapons[this.attackStyle].attack(this, this.aggro as Unit /* hack */, {
+      attackStyle: this.attackStyle,
+      magicBaseSpellDamage: this.magicMaxHit(),
+    });
 
-    
-
-    this.playAttackSound()
-
-    this.attackDelay = this.attackSpeed
+    return true;
   }
 
-  get consumesSpace (): Unit {
-    return this
+  get consumesSpace(): Unit {
+    return this;
   }
 
-  playAttackSound () {
-    if (Settings.playsAudio) {
-      const sound = SoundCache.getCachedSound(this.sound);
-      if (sound) {
-        let attemptedVolume = 1 / Pathing.dist(this.location.x, this.location.y, this.aggro.location.x, this.aggro.location.y);
-        attemptedVolume = Math.min(1, Math.max(0, attemptedVolume))
-        sound.volume = attemptedVolume;
-        sound.play()
-      }
+  override playAttackSound() {
+    if (Settings.playsAudio && this.sound) {
+      let attemptedVolume =
+        1 /
+        Pathing.dist(
+          Viewport.viewport.player.location.x,
+          Viewport.viewport.player.location.y,
+          this.location.x,
+          this.location.y,
+        );
+      attemptedVolume = Math.min(1, Math.max(0, Math.sqrt(attemptedVolume)));
+      SoundCache.play({
+        src: this.sound.src,
+        volume: attemptedVolume * this.sound.volume,
+      });
     }
   }
 
-  get combatLevel () {
-    return 99
+  override get combatLevel() {
+    return 99;
   }
 
-  contextActions (region: Region, x: number, y: number) {
+  override contextActions(region: Region, x: number, y: number) {
     const actions = [
       {
-        text: [{ text: 'Attack ', fillStyle: 'white' }, { text: this.mobName(), fillStyle: 'yellow' }, { text: ` (level ${this.combatLevel})`, fillStyle: Viewport.viewport.player.combatLevelColor(this) }],
+        text: [
+          { text: "Attack ", fillStyle: "white" },
+          { text: this.mobName(), fillStyle: "yellow" },
+          {
+            text: ` (level ${this.combatLevel})`,
+            fillStyle: Viewport.viewport.player.combatLevelColor(this),
+          },
+        ],
         action: () => {
-          Viewport.viewport.clickController.redClick()
-          Viewport.viewport.clickController.sendToServer(() => Viewport.viewport.clickController.playerAttackClick(this))
-        }
-      }
+          Viewport.viewport.clickController.redClick();
+          Viewport.viewport.clickController.sendToServer(() =>
+            Viewport.viewport.clickController.playerAttackClick(this),
+          );
+        },
+      },
     ];
 
     // hack hack hack
 
     if (this.removableWithRightClick) {
-      actions.push(
-        {
-          text: [{ text: 'Remove ', fillStyle: 'white' }, { text: this.mobName(), fillStyle: 'yellow' }, { text: ` (level ${this.combatLevel})`, fillStyle: Viewport.viewport.player.combatLevelColor(this) }],
-          action: () => {
-            this.region.removeMob(this);
-          }
-        }
-      );
+      actions.push({
+        text: [
+          { text: "Remove ", fillStyle: "white" },
+          { text: this.mobName(), fillStyle: "yellow" },
+          {
+            text: ` (level ${this.combatLevel})`,
+            fillStyle: Viewport.viewport.player.combatLevelColor(this),
+          },
+        ],
+        action: () => {
+          this.region.removeMob(this);
+        },
+      });
     }
 
     return actions;
   }
 
-
-  drawOverTile(tickPercent: number) {
+  drawOverTile(tickPercent: number, context: OffscreenCanvasRenderingContext2D, scale) {
     // Override me
   }
 
-  drawUnderTile(tickPercent: number) {
-    this.region.context.fillStyle = '#00000000';
-    if (Settings.displayFeedback){
+  drawUnderTile(tickPercent: number, context: OffscreenCanvasRenderingContext2D, scale) {
+    context.fillStyle = "#00000000";
+    if (Settings.displayFeedback) {
       if (this.dying > -1) {
-        this.region.context.fillStyle = '#964B0073'
+        context.fillStyle = "#964B0073";
       } else if (this.attackFeedback === AttackIndicators.BLOCKED) {
-        this.region.context.fillStyle = '#00FF0073'
+        context.fillStyle = "#00FF0073";
       } else if (this.attackFeedback === AttackIndicators.HIT) {
-        this.region.context.fillStyle = '#FF000073'
+        context.fillStyle = "#FF000073";
       } else if (this.attackFeedback === AttackIndicators.SCAN) {
-        this.region.context.fillStyle = '#FFFF0073'
+        context.fillStyle = "#FFFF0073";
       } else if (this.hasLOS) {
-        this.region.context.fillStyle = '#FF730073'
+        context.fillStyle = "#FF730073";
       } else {
-        this.region.context.fillStyle = this.color;
-      }  
+        context.fillStyle = this.color;
+      }
     }
     // Draw mob
-    this.region.context.fillRect(
-      -(this.size * Settings.tileSize) / 2,
-      -(this.size * Settings.tileSize) / 2,
-      this.size * Settings.tileSize,
-      this.size * Settings.tileSize
-    )
+    context.fillRect(-(this.size * scale) / 2, -(this.size * scale) / 2, this.size * scale, this.size * scale);
   }
 
-  
-  draw (tickPercent: number) {
-    if (Settings.displayMobLoS){
-      LineOfSight.drawLOS(this.region, this.location.x, this.location.y, this.size, this.attackRange, '#FF000055', this.type === UnitTypes.MOB)
+  override draw(
+    tickPercent: number,
+    context: OffscreenCanvasRenderingContext2D,
+    offset: Location,
+    scale: number,
+    drawUnderTile: boolean,
+  ) {
+    super.draw(tickPercent, context, offset, scale, drawUnderTile);
+    if (Settings.displayMobLoS) {
+      LineOfSight.drawLOS(
+        this.region,
+        this.location.x,
+        this.location.y,
+        this.size,
+        this.attackRange,
+        "#FF000055",
+        this.type === UnitTypes.MOB,
+      );
     }
 
-    
-    const perceivedX = Pathing.linearInterpolation(this.perceivedLocation.x, this.location.x, tickPercent)
-    const perceivedY = Pathing.linearInterpolation(this.perceivedLocation.y, this.location.y, tickPercent)
-    this.region.context.save()
-    this.region.context.translate(
-      perceivedX * Settings.tileSize + (this.size * Settings.tileSize) / 2,
-      (perceivedY - this.size + 1) * Settings.tileSize + (this.size * Settings.tileSize) / 2
-    )
+    const perceivedX = offset.x;
+    const perceivedY = offset.y;
+    context.save();
+    context.translate(
+      perceivedX * scale + (this.size * scale) / 2,
+      (perceivedY - this.size + 1) * scale + (this.size * scale) / 2,
+    );
 
-    this.drawUnderTile(tickPercent)
-    const currentImage = this.unitImage
-
-    if (Settings.rotated === 'south') {
-      this.region.context.rotate(Math.PI)
+    if (drawUnderTile) {
+      this.drawUnderTile(tickPercent, context, scale);
     }
-    if (Settings.rotated === 'south') {
-      this.region.context.scale(-1, 1)
+    const currentImage = this.unitImage;
+
+    if (Settings.rotated === "south") {
+      context.rotate(Math.PI);
+    }
+    if (Settings.rotated === "south") {
+      context.scale(-1, 1);
     }
 
-    this.region.context.save()
+    context.save();
     if (this.shouldShowAttackAnimation()) {
-      this.attackAnimation(tickPercent)
+      this.attackAnimation(tickPercent, context);
     }
 
-    if (currentImage){
-      this.region.context.drawImage(
+    if (currentImage) {
+      context.drawImage(
         currentImage,
-        -(this.size * Settings.tileSize) / 2,
-        -(this.size * Settings.tileSize) / 2,
-        this.size * Settings.tileSize,
-        this.size * Settings.tileSize
-      )
-
+        -(this.size * scale) / 2,
+        -(this.size * scale) / 2,
+        this.size * scale,
+        this.size * scale,
+      );
     }
 
-    this.region.context.restore()
+    context.restore();
 
-    if (Settings.rotated === 'south') {
-      this.region.context.scale(-1, 1)
+    if (Settings.rotated === "south") {
+      context.scale(-1, 1);
     }
 
-    this.drawOverTile(tickPercent)
+    this.drawOverTile(tickPercent, context, scale);
 
     if (this.aggro) {
-
       const unit = this.aggro as Unit;
 
-      if (LineOfSight.playerHasLineOfSightOfMob(this.region, this.aggro.location.x, this.aggro.location.y, this, unit.attackRange)) {
-        this.region.context.strokeStyle = '#00FF0073'
-        this.region.context.lineWidth = 1
-        this.region.context.strokeRect(
-          -(this.size * Settings.tileSize) / 2,
-          -(this.size * Settings.tileSize) / 2,
-          this.size * Settings.tileSize,
-          this.size * Settings.tileSize
+      if (
+        LineOfSight.playerHasLineOfSightOfMob(
+          this.region,
+          this.aggro.location.x,
+          this.aggro.location.y,
+          this,
+          unit.attackRange,
         )
+      ) {
+        context.strokeStyle = "#00FF0073";
+        context.lineWidth = 1;
+        context.strokeRect(-(this.size * scale) / 2, -(this.size * scale) / 2, this.size * scale, this.size * scale);
       }
     }
 
-
-    this.region.context.restore()
+    context.restore();
 
     if (!this.tcc) {
       return;
@@ -463,41 +524,30 @@ export class Mob extends Unit {
     // if (this.mobId !== 4) {
     //   return;
     // }
-    this.tcc.forEach((location: Location) => {
-      this.region.context.fillStyle = '#00FF0073'
-      this.region.context.fillRect(
-        location.x * Settings.tileSize, location.y * Settings.tileSize,
-        Settings.tileSize,
-        Settings.tileSize
-      )
-
-    })
+    /*this.tcc.forEach((location: Location) => {
+      context.fillStyle = "#00FF0073";
+      context.fillRect(location.x * scale, location.y * scale, scale, scale);
+    });*/
   }
-  drawUILayer(tickPercent: number) {
-    const perceivedX = Pathing.linearInterpolation(this.perceivedLocation.x, this.location.x, tickPercent)
-    const perceivedY = Pathing.linearInterpolation(this.perceivedLocation.y, this.location.y, tickPercent)
-    this.region.context.save()
-    this.region.context.translate(
-      perceivedX * Settings.tileSize + (this.size * Settings.tileSize) / 2,
-      (perceivedY - this.size + 1) * Settings.tileSize + (this.size * Settings.tileSize) / 2
-    )
-
-
-    if (Settings.rotated === 'south') {
-      this.region.context.rotate(Math.PI)
+  override drawUILayer(tickPercent, offset, context, scale, hitsplatsAbove) {
+    context.save();
+    context.translate(offset.x, offset.y);
+    if (Settings.rotated === "south") {
+      context.rotate(Math.PI);
     }
-    
-    this.drawHPBar()
 
-    this.drawHitsplats()
+    this.drawHPBar(context, scale);
+    this.drawHitsplats(context, scale, hitsplatsAbove);
+    this.drawOverheadPrayers(context, scale);
 
-    this.drawOverheadPrayers()
+    context.restore();
+  }
 
-    this.region.context.restore()
+  override create3dModel(): Model {
+    return CanvasSpriteModel.forRenderable(this);
+  }
 
-    this.drawIncomingProjectiles(tickPercent)
-
-
-
+  override get color() {
+    return "#FF0000";
   }
 }

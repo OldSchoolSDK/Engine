@@ -1,19 +1,20 @@
-'use strict'
+"use strict";
 
-import { BasePrayer, PrayerGroups } from '../../sdk/BasePrayer'
-import OverheadImg from '../../assets/images/prayers/meleeOver.png'
+import { BasePrayer, PrayerGroups } from "../../sdk/BasePrayer";
+import OverheadImg from "../../assets/images/prayers/meleeOver.png";
 
-import OnSound from '../../assets/sounds/meleeOn.ogg'
-import OffSound from '../../assets/sounds/meleeOff.ogg'
-import { Settings } from '../../sdk/Settings'
+import OnSound from "../../assets/sounds/meleeOn.ogg";
+import OffSound from "../../assets/sounds/meleeOff.ogg";
+import { Settings } from "../../sdk/Settings";
+import { Sound, SoundCache } from "../../sdk/utils/SoundCache";
 
 export class ProtectMelee extends BasePrayer {
-  get name () {
-    return 'Protect from Melee'
+  get name() {
+    return "Protect from Melee";
   }
 
-  get groups (): PrayerGroups[] {
-    return [PrayerGroups.OVERHEADS]
+  get groups(): PrayerGroups[] {
+    return [PrayerGroups.OVERHEADS];
   }
 
   levelRequirement(): number {
@@ -23,27 +24,27 @@ export class ProtectMelee extends BasePrayer {
     return 12;
   }
 
-  isOverhead () {
-    return true
+  isOverhead() {
+    return true;
   }
 
-  overheadImageReference () {
-    return OverheadImg
+  overheadImageReference() {
+    return OverheadImg;
   }
 
-  feature () {
-    return 'melee'
+  feature() {
+    return "melee";
   }
 
-  playOnSound () {
+  playOnSound() {
     if (Settings.playsAudio) {
-      new Audio(OnSound).play()
+      SoundCache.play(new Sound(OnSound, 0.35));
     }
   }
 
-  playOffSound () {
+  playOffSound() {
     if (Settings.playsAudio) {
-      new Audio(OffSound).play()
+      SoundCache.play(new Sound(OffSound, 0.35));
     }
   }
 }

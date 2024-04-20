@@ -1,26 +1,29 @@
-'use strict'
+"use strict";
 
 import { remove } from "lodash";
 import { Entity } from "./Entity";
-import { Item } from "./Item"
+import { Item } from "./Item";
 import { Mob } from "./Mob";
 import { Player } from "./Player";
 import { Settings } from "./Settings";
 import { Unit } from "./Unit";
-import { World } from "./World"
-
+import { World } from "./World";
 
 interface GroundYItems {
-  [key: number]: Item[]
+  [key: number]: Item[];
 }
 
 export interface GroundItems {
-  [key: number]: GroundYItems
+  [key: number]: GroundYItems;
 }
 
+export enum CardinalDirection {
+  NORTH,
+  SOUTH,
+}
 
 // Base class for any trainer region.
-export class Region{
+export class Region {
   canvas: OffscreenCanvas;
 
   players: Player[] = [];
@@ -30,17 +33,21 @@ export class Region{
   newMobs: Mob[] = [];
   mobs: Mob[] = [];
   entities: Entity[] = [];
-  
+
   mapImage: HTMLImageElement;
 
-  groundItems: GroundItems = { }
-  
+  groundItems: GroundItems = {};
+
   _serialNumber: string;
   get serialNumber(): string {
     if (!this._serialNumber) {
-      this._serialNumber = String(Math.random())
+      this._serialNumber = String(Math.random());
     }
     return this._serialNumber;
+  }
+
+  get initialFacing(): CardinalDirection {
+    return CardinalDirection.SOUTH;
   }
 
   midTick() {
@@ -58,38 +65,39 @@ export class Region{
   rightClickActions() {
     return [];
   }
-  
+
   get context() {
     if (!this.canvas) {
       if (Settings.mobileCheck()) {
         this.canvas = new OffscreenCanvas(2000, 2000);
-      }else{
+      } else {
         this.canvas = new OffscreenCanvas(10000, 10000);
       }
     }
-    return this.canvas.getContext('2d');
+    return this.canvas.getContext("2d");
   }
 
-  addEntity (entity: Entity) {
-    this.entities.push(entity)
+  addEntity(entity: Entity) {
+    this.entities.push(entity);
   }
 
-  removeEntity (entity: Entity) {
-    remove(this.entities, entity)
+  removeEntity(entity: Entity) {
+    entity.dying = 0;
+    remove(this.entities, entity);
   }
 
-  addMob (mob: Mob) {
+  addMob(mob: Mob) {
     if (!mob.region.world) {
-      this.mobs.push(mob)
-    }else{
-      this.newMobs.push(mob)
+      this.mobs.push(mob);
+    } else {
+      this.newMobs.push(mob);
     }
   }
 
-  removeMob (mob: Unit) {
-    remove(this.mobs, mob)
+  removeMob(mob: Mob) {
+    remove(this.mobs, mob);
   }
-  removePlayer (player: Player) {
+  removePlayer(player: Player) {
     remove(this.players, player);
   }
   addGroundItem(player: Player, item: Item, x: number, y: number) {
@@ -100,37 +108,41 @@ export class Region{
       this.groundItems[x][y] = [];
     }
 
-    item.groundLocation = { x: player.location.x, y:  player.location.y };
+    item.groundLocation = { x: player.location.x, y: player.location.y };
     this.groundItems[x][y].push(item);
   }
 
-  getName (): string {
-    return 'My Region'
+  getName(): string {
+    return "My Region";
   }
 
-  get width (): number {
-    return 0
+  get width(): number {
+    return 0;
   }
 
-  get height (): number {
-    return 0
+  get height(): number {
+    return 0;
   }
 
-  mapImagePath (): string {
-    return ''
+  mapImagePath(): string {
+    return "";
   }
 
-
-  drawWorldBackground() {
+  drawWorldBackground(context: OffscreenCanvasRenderingContext2D, scale: number) {
     // Override me
   }
+
+  drawDefaultFloor() {
+    return true;
+  }
+
   groundItemsAtLocation(x: number, y: number) {
     return (this.groundItems[x] ? this.groundItems[x][y] : []) || [];
   }
 
   removeGroundItem(item: Item, x: number, y: number) {
-    if (this.groundItems[x]){
-      if (this.groundItems[x][y]){
+    if (this.groundItems[x]) {
+      if (this.groundItems[x][y]) {
         remove(this.groundItems[x][y], item);
       }
     }
@@ -144,14 +156,22 @@ export class Region{
         const items = this.groundItems[x][y];
         items.forEach((item: Item) => {
           ctx.drawImage(
-            item.inventorySprite, 
-            x * Settings.tileSize, 
+            item.inventorySprite,
+            x * Settings.tileSize,
             y * Settings.tileSize,
             Settings.tileSize,
-            Settings.tileSize
-          )
-        })
-      })
-    })
+            Settings.tileSize,
+          );
+        });
+      });
+    });
+  }
+
+  // calls preload on all renderable children
+  async preload() {
+    await Promise.all(this.entities.map((entity) => entity.preload()));
+    await Promise.all(this.mobs.map((mob) => mob.preload()));
+    await Promise.all(this.newMobs.map((mob) => mob.preload()));
+    await Promise.all(this.players.map((players) => players.preload()));
   }
 }

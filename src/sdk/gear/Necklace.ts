@@ -1,7 +1,10 @@
-import { Equipment } from "../Equipment";
+import { Equipment, EquipmentTypes } from "../Equipment";
 import { Player } from "../Player";
 
 export class Necklace extends Equipment {
+  get type(): EquipmentTypes {
+    return EquipmentTypes.NECK;
+  }
 
   assignToPlayer(player: Player) {
     player.equipment.necklace = this;
