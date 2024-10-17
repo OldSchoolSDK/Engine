@@ -11,6 +11,10 @@ if (!process.env.BUILD_DATE) {
   isDevBuild = true;
   process.env.BUILD_DATE = "";
 }
+if (!process.env.DEPLOY_URL) {
+  isDevBuild = true;
+  process.env.DEPLOY_URL = "http://localhost:8000/";
+}
 const config = {
   mode: isDevBuild ? "development" : "production",
   entry: "./src/index.ts",
@@ -32,12 +36,16 @@ const config = {
       patterns: [
         { from: `index.html`, to: "", context: `src/` },
         { from: `manifest.json`, to: "", context: `src/` },
-        { from: `assets/images/webappicon.png`, to: "webappicon.png", context: `src/` },
+        {
+          from: `assets/images/webappicon.png`,
+          to: "webappicon.png",
+          context: `src/`,
+        },
         { from: `assets/fonts/*.woff`, to: "", context: `src/` },
         { from: `assets/fonts/*.woff2`, to: "", context: `src/` },
       ],
     }),
-    new webpack.EnvironmentPlugin(["COMMIT_REF", "BUILD_DATE"]),
+    new webpack.EnvironmentPlugin(["COMMIT_REF", "BUILD_DATE", "DEPLOY_URL"]),
   ],
   module: {
     rules: [
@@ -47,7 +55,7 @@ const config = {
         exclude: /node_modules/,
       },
       {
-        test: /\.(png|svg|jpg|jpeg|gif|ogg)$/i,
+        test: /\.(png|svg|jpg|jpeg|gif|ogg|gltf|glb)$/i,
         type: "asset/resource",
       },
     ],
